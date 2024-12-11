@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: linear-gradient(135deg, #74ebd5 60%, #9face6 20%);
+        }
+
+        .todo {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #0c0101;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .todo button {
+            background-color: rgb(189, 9, 9);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .todo button:hover {
+            background-color: darkred;
+        }
+
+        .todo-title {
+            cursor: pointer;
+            color: black;
+            font-weight: bold;
+        }
+
+        .todo-title input {
+            font-size: 16px;
+            padding: 5px;
+            width: 80%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .confirm-btn {
+            background-color: green;
+            color: white;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .confirm-btn:hover {
+            background-color: darkgreen;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Todo List</h1>
+    <div id="todo-list"></div>
+
+    <script>
+        // Retrieve CSRF token from cookies
+        function getCSRFTokenFromCookie() {
+            const csrfCookie = document.cookie.split('; ')
+                .find(row => row.startsWith('csrftoken='));
+            return csrfCookie ? csrfCookie.split('=')[1] : null;
+        }
+
+        const csrfToken = getCSRFTokenFromCookie();
+
+        // Fetch todos from the API
+        async function fetchTodos() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/todo_get', {
+                    method: 'GET',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error fetching todos');
+                }
+
+                const todos = await response.json();
+                const todoListDiv = document.getElementById('todo-list');
+                todoListDiv.innerHTML = ''; // Clear current todos
+
+                todos.forEach(todo => {
+                    const todoDiv = document.createElement('div');
+                    todoDiv.classList.add('todo');
+                    todoDiv.id = `todo-${todo.id}`;
+                    todoDiv.innerHTML = `
+                        <span class="todo-title" onclick="editTodoInPlace(${todo.id})">${todo.title}</span>
+                        <div>
+                            <button style="background-color: #005dff;" onclick="editTodoInPlace(${todo.id})">Edit</button>
+                            <button onclick="deleteTodo(${todo.id})">Delete</button>
+                        </div>
+                    `;
+                    todoListDiv.appendChild(todoDiv);
+                });
+            } catch (error) {
+                console.error('Error fetching todos:', error);
+            }
+        }
+
+        // Delete todo by ID
+        async function deleteTodo(todoId) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/todo_delete/${todoId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+
+                if (response.ok) {
+                    alert('Todo deleted');
+                    fetchTodos(); // Refresh the list after deletion
+                } else {
+                    alert('Error deleting todo');
+                }
+            } catch (error) {
+                console.error('Error deleting todo:', error);
+            }
+        }
+
+        // Edit Todo in place
+        async function editTodoInPlace(todoId) {
+            const todoElement = document.querySelector(`#todo-${todoId} .todo-title`);
+            const currentTitle = todoElement.textContent;
+
+            const inputField = document.createElement('input');
+            inputField.type = 'text';
+            inputField.value = currentTitle;
+            todoElement.textContent = ''; 
+            todoElement.appendChild(inputField);
+
+            const confirmButton = document.createElement('button');
+            confirmButton.textContent = 'OK';
+            confirmButton.classList.add('confirm-btn');
+            todoElement.appendChild(confirmButton);
+
+            inputField.focus();
+
+            confirmButton.addEventListener('click', () => {
+                const newTitle = inputField.value.trim();
+                if (!newTitle) {
+                    alert("Title cannot be empty!");
+                    return;
+                }
+                updateTodoTitle(todoId, newTitle);
+            });
+        }
+
+        // Update the Todo title
+        async function updateTodoTitle(todoId, newTitle) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/todo_update/${todoId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ title: newTitle }),
+                });
+
+                if (response.ok) {
+                    alert('Todo Updated');
+                    fetchTodos(); 
+                } else {
+                    alert('Error Updating todo');
+                }
+            } catch (error) {
+                console.error('Error Updating todo:', error);
+            }
+        }
+
+        // Initialize and fetch todos on page load
+        window.onload = fetchTodos;
+    </script>
+
+    <a href="{% url 'todo' %}" >Add new todo</a>
+    <a href="{% url 'logout' %}">Logout</a>
+</body>
+
+</html>
